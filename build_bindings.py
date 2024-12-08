@@ -258,6 +258,8 @@ def build_pkmn_engine(out_dir: str, options: List[str]) -> None:
         exit(1)
 
 
+import re
+
 def simplify_pkmn_header(header_text: str) -> str:
     """Simplifiy the pkmn.h file so that cffi can parse it.
 
@@ -271,8 +273,11 @@ def simplify_pkmn_header(header_text: str) -> str:
     """
     # Remove anything C++-specific
     without_cpp_only = re.sub(r'#ifdef __cplusplus(.*?)#endif', "", header_text, flags=re.DOTALL)
+    _without_specific_crap = without_cpp_only.replace("#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L", "")
+    without_specific_crap = _without_specific_crap.replace('static_assert(sizeof(double) * CHAR_BIT == 64, "libpkmn requires IEEE 754 64-bit doubles");',"")
+
     # Remove preprocessor directives: #ifndef, #ifdef, #include, #endif
-    without_preprocessor = re.sub(r"(#((ifn?|un)def|include) .*|#endif)", "", without_cpp_only)
+    without_preprocessor = re.sub(r"(#((ifn?|un)def|include) .*|#endif)", "", without_specific_crap)
     # Remove defines that are NOT numeric constants
     without_defines = re.sub(r"#define [^\s]{1,}(\s[^\d]+)?\n", "", without_preprocessor)
     # remove PKMN_OPAQUE definition replace PKMN_OPAQUE types with their definition
@@ -286,6 +291,7 @@ def simplify_pkmn_header(header_text: str) -> str:
         r'typedef struct { uint8_t bytes[\1]; }',
         without_pkmn_opaque_definition,
     )
+
 
 
 # Copy data json in
@@ -302,10 +308,10 @@ libpkmn_showdown_no_trace = FFI()
 libpkmn_trace = FFI()
 libpkmn_no_trace = FFI()
 for (ffi, name, options) in [
-    (libpkmn_showdown_trace, "libpkmn_showdown_trace", ["-Dshowdown=true", "-Dtrace=true"]),
-    (libpkmn_showdown_no_trace, "libpkmn_showdown_no_trace", ["-Dshowdown=true", "-Dtrace=false"]),
-    (libpkmn_trace, "libpkmn_trace", ["-Dshowdown=false", "-Dtrace=true"]),
-    (libpkmn_no_trace, "libpkmn_no_trace", ["-Dshowdown=false", "-Dtrace=false"]),
+    (libpkmn_showdown_trace, "libpkmn_showdown_trace", ["-Dshowdown=true", "-Dlog=true"]),
+    (libpkmn_showdown_no_trace, "libpkmn_showdown_no_trace", ["-Dshowdown=true", "-Dlog=false"]),
+    (libpkmn_trace, "libpkmn_trace", ["-Dshowdown=false", "-Dlog=true"]),
+    (libpkmn_no_trace, "libpkmn_no_trace", ["-Dshowdown=false", "-Dlog=false"]),
 ]:
         log(f"Building {name} bindings")
         output_dir = os.path.join(os.getcwd(), "engine", "zig-out", name)
@@ -317,10 +323,11 @@ for (ffi, name, options) in [
         header_text = open(pkmn_h_path).read()
         bonus_headers = (
             f"\n#define IS_SHOWDOWN_COMPATIBLE {1 if has_showdown else 0}" +
-            f"\n#define HAS_TRACE {1 if '-Dtrace=true' in options else 0}"
+            f"\n#define HAS_TRACE {1 if '-Dlog=true' in options else 0}"
         )
 
-        ffi.cdef(simplify_pkmn_header(header_text) + bonus_headers)
+
+        ffi.cdef(simplify_pkmn_header(header_text) + bonus_headers) # Fails here 
 
         ffi.set_source(
             name,

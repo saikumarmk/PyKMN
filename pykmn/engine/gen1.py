@@ -462,17 +462,35 @@ class Battle:
         self._libpkmn = libpkmn
         self._pkmn_battle = self._libpkmn.ffi.new("pkmn_gen1_battle *")
 
-        if self._libpkmn.lib.HAS_TRACE:
+
+        if True: # ISSUE - need to check if the compilation flag for logging true works
             self.trace_buf = self._libpkmn.ffi.new(
                 "uint8_t[]",
                 self._libpkmn.lib.PKMN_GEN1_LOGS_SIZE,
             )
+            # Initialize log_options with trace buffer
+            self.log_options = self._libpkmn.ffi.new("pkmn_gen1_log_options *", {
+                "buf": self.trace_buf,
+                "len": self._libpkmn.lib.PKMN_GEN1_LOGS_SIZE,
+            })
         else:
             self.trace_buf = self._libpkmn.ffi.NULL
+            self.log_options = self._libpkmn.ffi.NULL  # No logs if trace is disabled
+
         self._choice_buf = self._libpkmn.ffi.new(
             "pkmn_choice[]",
-            self._libpkmn.lib.PKMN_OPTIONS_SIZE,
+            self._libpkmn.lib.PKMN_CHOICES_SIZE,
         )
+
+        # Initialize battle options
+        self.battle_options = self._libpkmn.ffi.new("pkmn_gen1_battle_options *")
+        self._libpkmn.lib.pkmn_gen1_battle_options_set(
+            self.battle_options,    # pkmn_gen1_battle_options *options
+            self.log_options,       # const pkmn_gen1_log_options *log
+            self._libpkmn.ffi.NULL, # const pkmn_gen1_chance_options *chance (NULL for now)
+            self._libpkmn.ffi.NULL  # const pkmn_gen1_calc_options *calc (NULL for now)
+        )
+
 
         # Initialize the sides
         p1_side_start = LAYOUT_OFFSETS['Battle']['sides']
@@ -764,8 +782,13 @@ class Battle:
             self._pkmn_battle,          # pkmn_gen1_battle *battle
             p1_choice,     # pkmn_choice c1
             p2_choice,     # pkmn_choice c2
-            self.trace_buf,                  # uint8_t *buf
-            self._libpkmn.lib.PKMN_GEN1_LOGS_SIZE,     # size_t len
+            self.battle_options,                  # uint8_t *buf # update to options *
+        )
+        self._libpkmn.lib.pkmn_gen1_battle_options_set(
+            self.battle_options,    # pkmn_gen1_battle_options *options
+            self._libpkmn.ffi.NULL,       # set t o null 
+            self._libpkmn.ffi.NULL, # const pkmn_gen1_chance_options *chance (NULL for now)
+            self._libpkmn.ffi.NULL  # const pkmn_gen1_calc_options *calc (NULL for now)
         )
 
         result = Result(_pkmn_result, _libpkmn=self._libpkmn)
@@ -1297,16 +1320,16 @@ class Battle:
             LAYOUT_OFFSETS['Side']['active'] + \
             LAYOUT_OFFSETS['ActivePokemon']['volatiles']
 
-        duration_byte_offset = base + (LAYOUT_OFFSETS['Volatiles']['disabled_duration'] // 8)
-        duration_bit_offset = LAYOUT_OFFSETS['Volatiles']['disabled_duration'] % 8
+        duration_byte_offset = base + (LAYOUT_OFFSETS['Volatiles']['disable_duration'] // 8)
+        duration_bit_offset = LAYOUT_OFFSETS['Volatiles']['disable_duration'] % 8
         duration = extract_unsigned_int_at_offset(
             byte=self._pkmn_battle.bytes[duration_byte_offset],
             offset=duration_bit_offset,
             length=4,
         )
 
-        move_byte_offset = base + (LAYOUT_OFFSETS['Volatiles']['disabled_move'] // 8)
-        move_bit_offset = LAYOUT_OFFSETS['Volatiles']['disabled_move'] % 8
+        move_byte_offset = base + (LAYOUT_OFFSETS['Volatiles']['disable_move'] // 8)
+        move_bit_offset = LAYOUT_OFFSETS['Volatiles']['disable_move'] % 8
         move = extract_unsigned_int_at_offset(
             byte=self._pkmn_battle.bytes[move_byte_offset],
             offset=move_bit_offset,
@@ -1825,7 +1848,7 @@ class Battle:
             # optimization: is IntEnum more performant?
             requested_kind,   # pkmn_choice_kind request
             self._choice_buf,            # pkmn_choice out[]
-            self._libpkmn.lib.PKMN_OPTIONS_SIZE,  # size_t len
+            self._libpkmn.lib.PKMN_CHOICES_SIZE,  # size_t len
         )
 
         return num_choices

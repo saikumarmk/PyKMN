@@ -14,6 +14,7 @@ import libpkmn_showdown_no_trace as _showdown_no_trace # type: ignore
 
 from typing import Any
 
+
 # TODO: document how to use these bindings
 class LibpkmnBinding:
     """A generic type for libpkmn library bindings.

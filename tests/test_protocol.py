@@ -423,7 +423,7 @@ class TestProtocolParsing(unittest.TestCase):
         self.case(
             [MESSAGES.index('End'), 5, REASONS['End'].index('DisableSilent')],
             ["|-end|p1a: Pokémon #5|Disable|[silent]"],
-        )
+        ) # weird issue to look into here
         self.case(
             [MESSAGES.index('End'), 5, REASONS['End'].index('ConfusionSilent')],
             ["|-end|p1a: Pokémon #5|confusion|[silent]"],
